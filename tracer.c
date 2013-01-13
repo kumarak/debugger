@@ -35,17 +35,30 @@ void run_target(const char* name)
 void run_debugger(pid_t child_pid)
 {
 	int wait_status;
+	struct user_regs_struct regs;
 	unsigned icounter = 0;
 	procmsg("debugger started\n");
 
 	wait(&wait_status);
+
+	/*Obtain and show child instruction pointer*/
+	ptrace(PTRACE_GETREGS, child_pid, 0, &regs);
+	procmsg("Child started. EIP = 0x%08x\n", regs.rip);
+
+	unsigned addr = regs.rip;
+	unsigned data = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)addr, 0);
+	procmsg("Original data at 0x%08x: 0x%08x\n", addr, data);
+	unsigned data_with_trap = (data && 0xFFFFFFFFFFFFFF00) | 0xCC;
+	ptrace(PTRACE_POKETEXT, child_pid, (void*)addr, (void*)data_with_trap);
+
+
 	
 	while(WIFSTOPPED(wait_status)){
 		icounter++;
-		struct user_regs_struct regs;
+	//	struct user_regs_struct regs;
 		ptrace(PTRACE_GETREGS, child_pid, 0, &regs);
 		unsigned instr = ptrace(PTRACE_PEEKTEXT, child_pid, regs.rip, 0);
-		procmsg("icounter = %u EIP = 0x%08x instr = 0x%08x\n", icounter, regs.rip, instr);
+//		procmsg("icounter = %u EIP = 0x%08x instr = 0x%08x\n", icounter, regs.rip, instr);
 		if(ptrace(PTRACE_SINGLESTEP, child_pid, 0, 0) < 0){
 			perror("ptrace");
 			return;
